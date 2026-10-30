@@ -1,5 +1,5 @@
 #include "game.h"
-#include "platform/git_version.h"
+#include <platform/git_version.h>
 
 #include <math.h>
 #include <stdio.h>

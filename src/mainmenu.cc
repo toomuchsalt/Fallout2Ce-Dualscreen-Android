@@ -29,7 +29,7 @@
 #include "version.h"
 #include "window_manager.h"
 
-#include "platform/git_version.h"
+#include <platform/git_version.h>
 
 #include <math.h>
 

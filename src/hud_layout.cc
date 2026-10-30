@@ -1,4 +1,7 @@
 #include "hud_layout.h"
+#ifdef FALLOUT_ARMADA
+#include "platform/linux/display.h"
+#endif
 
 #include <algorithm>
 #include <cmath>
@@ -203,7 +206,9 @@ float hudGetScreenDensity()
         return static_cast<float>(settings.touch.hud_density);
     }
 
-#ifdef __ANDROID__
+#ifdef FALLOUT_ARMADA
+    return linuxDensity("FALLOUT_TOP_DENSITY", 2.0f);
+#elif defined(__ANDROID__)
     // Android reports `DisplayMetrics.densityDpi` here, dp = densityDpi / 160.
     float ddpi = 0.0f;
     if (SDL_GetDisplayDPI(0, &ddpi, nullptr, nullptr) == 0 && ddpi > 0.0f) {

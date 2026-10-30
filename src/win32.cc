@@ -23,6 +23,9 @@
 #include "main.h"
 #endif
 #include "svga.h"
+#ifdef FALLOUT_ARMADA
+#include "platform/linux/companion.h"
+#endif
 #include "window_manager.h"
 
 #include "scan_unimplemented.h"
@@ -104,14 +107,40 @@ int main(int argc, char* argv[])
     chdir(SDL_AndroidGetExternalStoragePath());
 #endif
 
+#ifdef FALLOUT_ARMADA
+    SDL_SetHint(SDL_HINT_MOUSE_TOUCH_EVENTS, "0");
+    SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
+    // Steam's virtual controller remains usable while the companion owns focus.
+    SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
+#endif
     if (SDL_Init(SDL_INIT_AUDIO | SDL_INIT_VIDEO | SDL_INIT_EVENTS) != 0) {
         return EXIT_FAILURE;
     }
 
+#ifdef FALLOUT_ARMADA
+    // Steam Input may turn touchscreen taps into left mouse clicks in Game
+    // Mode. Feed those through the same finger/UI path as native touch.
+    // The companion already forwards mouse input itself; this hint is local
+    // to the main process, so it cannot duplicate bottom-screen touches.
+    const char* session = SDL_getenv("FALLOUT_SESSION");
+    const char* video = SDL_GetCurrentVideoDriver();
+    if (session && SDL_strcmp(session, "game") == 0
+        && video && SDL_strcmp(video, "x11") == 0) {
+        SDL_SetHint(SDL_HINT_MOUSE_TOUCH_EVENTS, "1");
+    }
+#endif
+
     // CE: Game controllers (gamepad.h); the game runs without them.
     gamepadInit();
+#ifdef FALLOUT_ARMADA
+    SDL_StopTextInput();
+    linuxCompanionInit();
+#endif
 
     atexit([] {
+#ifdef FALLOUT_ARMADA
+        linuxCompanionShutdown();
+#endif
         audioEngineExit();
         SDL_Quit();
     });

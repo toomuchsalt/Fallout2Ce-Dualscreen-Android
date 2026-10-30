@@ -1,9 +1,9 @@
 name: Build
 
-# The dual-screen (AYN Thor) port: the Android APK only. Every push to main
-# replaces the "latest" pre-release, so the newest APK is always at
-# https://github.com/<owner>/<repo>/releases/download/latest/Fallout2-Dualscreen.apk
-# A pushed version tag (v0.1, v0.2...) makes a permanent release named after it.
+# Android APK and native ARM64 Linux package for Armada / AYN Thor.
+# Pushes to main replace the latest pre-release; v* tags make permanent releases.
+# One publishing job collects both artifacts so neither build can overwrite
+# the other platform's release assets.
 
 on:
   push:
@@ -16,6 +16,9 @@ on:
       - opened
       - synchronize
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 concurrency:
   group: build-${{ github.ref }}
@@ -39,10 +42,10 @@ jobs:
           find src -type f \( -name \*.cc -o -name \*.h \) | xargs clang-format --dry-run --Werror
 
   android:
-    name: Android APK (arm64)
+    name: Android APK
     runs-on: ubuntu-latest
-    permissions:
-      contents: write # to publish the releases
+    outputs:
+      signing: ${{ steps.signing.outputs.signing }}
 
     steps:
       - name: Clone
@@ -66,6 +69,7 @@ jobs:
       # over the last one. Without them the APK is signed with a one-off key:
       # it still installs, but the next one needs the old one uninstalled.
       - name: Signing key
+        id: signing
         env:
           KEYSTORE_B64: ${{ secrets.THOR_KEYSTORE_B64 }}
           KEYSTORE_PASSWORD: ${{ secrets.THOR_KEYSTORE_PASSWORD }}
@@ -84,10 +88,10 @@ jobs:
               echo "keyAlias=fallout2thor"
               echo "keyPassword=$PW"
             } > os/android/debug-keystore.properties
-            echo "SIGNING=stable" >> "$GITHUB_ENV"
+            echo "signing=stable" >> "$GITHUB_OUTPUT"
             echo "stable signing key: yes"
           else
-            echo "SIGNING=one-off" >> "$GITHUB_ENV"
+            echo "signing=one-off" >> "$GITHUB_OUTPUT"
             echo "::warning::No THOR_KEYSTORE_B64 / THOR_KEYSTORE_PASSWORD secrets: this APK uses a one-off key"
           fi
 
@@ -112,10 +116,85 @@ jobs:
           path: out/Fallout2-Dualscreen.apk*
           if-no-files-found: error
 
+  armada:
+    name: Armada Linux (aarch64)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone
+        uses: actions/checkout@v4
+
+      - name: Build cross compiler image
+        run: docker build -t fallout2-armada-cross -f os/linux/Containerfile.cross .
+
+      - name: Build and stage Armada package
+        run: |
+          docker run --rm --user "$(id -u):$(id -g)" \
+            -v "$PWD:/src" fallout2-armada-cross \
+            cmake -S . -B out/build/armada-aarch64 -G Ninja \
+              -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain/armada-aarch64.cmake \
+              -DFALLOUT_ARMADA=ON -DFALLOUT_VENDORED=OFF \
+              -DFALLOUT_DIAGNOSTICS=OFF -DCMAKE_BUILD_TYPE=Release \
+              -DFALLOUT_APP_VERSION="armada-${GITHUB_SHA::7}"
+          docker run --rm --user "$(id -u):$(id -g)" \
+            -v "$PWD:/src" fallout2-armada-cross \
+            cmake --build out/build/armada-aarch64 \
+              --target fallout2-ce fallout2-companion fallout2-setup --parallel 2
+          docker run --rm --user "$(id -u):$(id -g)" \
+            -v "$PWD:/src" fallout2-armada-cross \
+            cmake --install out/build/armada-aarch64 \
+              --prefix /src/out/stage/armada-aarch64/Fallout2-Armada --strip
+
+      - name: Collect Armada archive
+        run: |
+          for binary in fallout2-ce fallout2-companion; do
+            readelf -h "out/stage/armada-aarch64/Fallout2-Armada/bin/$binary" | grep -q 'Machine:.*AArch64'
+          done
+          mkdir -p out/armada
+          readelf -h "out/stage/armada-aarch64/Fallout2-Armada/Install Fallout 2" | grep -q 'Machine:.*AArch64'
+          tar -C out/stage/armada-aarch64 -czf out/armada/Fallout2-Dualscreen-Armada-aarch64.tar.gz Fallout2-Armada
+          (cd out/armada && sha256sum Fallout2-Dualscreen-Armada-aarch64.tar.gz > Fallout2-Dualscreen-Armada-aarch64.tar.gz.sha256)
+
+      - name: Upload Armada package
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fallout2-Dualscreen-armada-aarch64
+          path: out/armada/Fallout2-Dualscreen-Armada-aarch64.tar.gz*
+          if-no-files-found: error
+
+  publish:
+    name: Publish Android and Armada releases
+    needs: [android, armada]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Clone
+        uses: actions/checkout@v4
+
+      - name: Download Android APK
+        uses: actions/download-artifact@v4
+        with:
+          name: Fallout2-Dualscreen-apk
+          path: out
+
+      - name: Download Armada package
+        uses: actions/download-artifact@v4
+        with:
+          name: Fallout2-Dualscreen-armada-aarch64
+          path: out
+
+      - name: Verify artifact checksums
+        run: |
+          cd out
+          sha256sum -c Fallout2-Dualscreen.apk.sha256
+          sha256sum -c Fallout2-Dualscreen-Armada-aarch64.tar.gz.sha256
+
       - name: Publish as the latest build
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
+          SIGNING: ${{ needs.android.outputs.signing }}
         run: |
           if [ "$SIGNING" = "stable" ]; then
             SIGN_NOTE="Signed with the port's stable key: installs over earlier builds."
@@ -125,15 +204,19 @@ jobs:
           cat > notes.md <<EOF
           Built automatically from ${GITHUB_SHA::7}: $(git log -1 --format=%s)
 
-          Fallout 2 Community Engine for Android phones (imbaner/fallout2-ce-mobile), adapted for dual-screen devices such as the AYN Thor. Installs beside the original app, never over it. No game data inside: you need your own copy of Fallout 2.
+          Fallout 2 Community Engine for dual-screen devices such as the AYN Thor.
 
-          ${SIGN_NOTE}
+          - Android: Fallout2-Dualscreen.apk. Installs beside the original app. ${SIGN_NOTE}
+          - Armada OS: Fallout2-Dualscreen-Armada-aarch64.tar.gz. Native ARM64 Linux build; extract the archive, open Fallout2-Armada, and double-click Install Fallout 2. No terminal or system package installation is needed.
+          - Armada installation and controls: https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_SHA}/docs/armada-installation.md
+
+          No game data inside: you need your own copy of Fallout 2.
 
           Free and non-commercial, under the Sustainable Use License (LICENSE.md).
           EOF
           sed -i 's/^          //' notes.md
           gh release delete latest --yes --cleanup-tag || true
-          gh release create latest out/Fallout2-Dualscreen.apk out/Fallout2-Dualscreen.apk.sha256 --prerelease --target "$GITHUB_SHA" \
+          gh release create latest out/Fallout2-Dualscreen.apk out/Fallout2-Dualscreen.apk.sha256 out/Fallout2-Dualscreen-Armada-aarch64.tar.gz out/Fallout2-Dualscreen-Armada-aarch64.tar.gz.sha256 --prerelease --target "$GITHUB_SHA" \
             --title "Latest build ($(date -u +%Y-%m-%d) ${GITHUB_SHA::7})" \
             --notes-file notes.md
 
@@ -144,8 +227,8 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           if gh release view "$TAG" > /dev/null 2>&1; then
-            gh release upload "$TAG" out/Fallout2-Dualscreen.apk out/Fallout2-Dualscreen.apk.sha256 --clobber
+            gh release upload "$TAG" out/Fallout2-Dualscreen.apk out/Fallout2-Dualscreen.apk.sha256 out/Fallout2-Dualscreen-Armada-aarch64.tar.gz out/Fallout2-Dualscreen-Armada-aarch64.tar.gz.sha256 --clobber
           else
-            gh release create "$TAG" out/Fallout2-Dualscreen.apk out/Fallout2-Dualscreen.apk.sha256 --verify-tag \
+            gh release create "$TAG" out/Fallout2-Dualscreen.apk out/Fallout2-Dualscreen.apk.sha256 out/Fallout2-Dualscreen-Armada-aarch64.tar.gz out/Fallout2-Dualscreen-Armada-aarch64.tar.gz.sha256 --verify-tag \
               --title "Fallout 2 Dualscreen $TAG" --generate-notes
           fi

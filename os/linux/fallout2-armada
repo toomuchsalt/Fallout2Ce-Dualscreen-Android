@@ -1,0 +1,175 @@
+#!/usr/bin/env python3
+"""Native launcher. No game files, configuration, or saves are overwritten."""
+import argparse
+import fcntl
+import logging
+import json
+import html
+from logging.handlers import RotatingFileHandler
+import threading
+import os
+from pathlib import Path
+import signal
+import subprocess
+import sys
+import time
+
+
+# Installed bundles carry the support module in share; source-tree runs use
+# the adjacent module. This never relies on PATH or the working directory.
+_binary_dir = Path(__file__).resolve().parent
+_support = _binary_dir.parent / "share/fallout2-armada"
+sys.path.insert(0, str(_support if (_support / "armada_desktop.py").is_file() else _binary_dir))
+from armada_desktop import (Cancelled, Dialogs, UserError, choose_game, installation_lock,
+                            prepare_assets, saved_game_dir, save_game_dir, state_dir,
+                            validate_game_dir)
+
+
+def desktop_outputs(env):
+    """Resolve internal connector identities even when SDL shows model names."""
+    if "KDE" not in env.get("XDG_CURRENT_DESKTOP", "").upper():
+        return
+    try:
+        query_env = dict(env, QT_QPA_PLATFORM="wayland")
+        result = subprocess.run(["kscreen-doctor", "-j"], env=query_env,
+                                capture_output=True, text=True, timeout=3, check=True)
+        outputs = json.JSONDecoder().raw_decode(result.stdout.lstrip())[0]["outputs"]
+        for key, connector in (("FALLOUT_TOP_OUTPUT", "DSI-2"), ("FALLOUT_BOTTOM_OUTPUT", "DSI-1")):
+            if key in env:
+                continue
+            output = next(o for o in outputs if o["name"] == connector and o.get("enabled", True))
+            mode = next(m for m in output["modes"] if str(m["id"]) == str(output["currentModeId"]))
+            width, height = mode["size"]["width"], mode["size"]["height"]
+            if output.get("rotation") in (2, 8):
+                width, height = height, width
+            scale = output.get("scale") or 1
+            pos = output["pos"]
+            # SDL2-compat exposes physical sizes at logical positions;
+            # native SDL2 may expose logical sizes. Connector identity wins,
+            # with both bounds variants available for older SDL naming.
+            env[key] = connector
+            env[key.replace("_OUTPUT", "_BOUNDS")] = f"bounds:{pos['x']},{pos['y']},{round(width / scale)},{round(height / scale)}"
+            env[key.replace("_OUTPUT", "_PIXEL_BOUNDS")] = f"bounds:{pos['x']},{pos['y']},{width},{height}"
+    except (OSError, subprocess.SubprocessError, ValueError, KeyError, StopIteration, TypeError):
+        # Explicit selectors and SDL's connector names remain usable when
+        # KScreen is unavailable or either internal output is disabled.
+        pass
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Fallout 2 CE for Armada (bring your own game data)")
+    parser.add_argument("--game-dir", type=Path)
+    parser.add_argument("--gui", action="store_true", help="show setup/errors graphically")
+    parser.add_argument("--choose-game", action="store_true", help="choose a game folder graphically")
+    parser.add_argument("--single-screen", action="store_true")
+    parser.add_argument("--mode", choices=("auto", "game", "desktop"), default="auto")
+    args, engine_args = parser.parse_known_args()
+    if engine_args[:1] == ["--"]:
+        engine_args = engine_args[1:]
+    dialogs = None
+    try:
+        if args.gui or args.choose_game:
+            dialogs = Dialogs()
+        game = (args.game_dir or saved_game_dir() or Path.home() / "Games/Fallout2").expanduser().resolve()
+        if args.choose_game or (args.gui and args.game_dir is None and saved_game_dir() is None):
+            game = choose_game(dialogs, game)
+            save_game_dir(game)
+        else:
+            try:
+                validate_game_dir(game)
+            except UserError:
+                if not dialogs or args.game_dir is not None:
+                    raise
+                game = choose_game(dialogs, game)
+                save_game_dir(game)
+        if args.choose_game:
+            dialogs.info("The game folder has been saved. Launch Fallout 2 (Armada) to play.")
+            return 0
+        with installation_lock():
+            result = launch_game(game, args, engine_args)
+        if result and dialogs:
+            dialogs.error("Fallout 2 could not start or stopped unexpectedly. Open the launcher log in " + html.escape(str(state_dir())) + " for details.")
+        return result
+    except Cancelled:
+        return 0
+    except (OSError, UserError) as exc:
+        if dialogs:
+            dialogs.error(html.escape(str(exc)))
+        else:
+            print("Fallout 2: " + str(exc), file=sys.stderr)
+        return 2
+
+
+def launch_game(game, args, engine_args):
+    binary_dir = Path(__file__).resolve().parent
+    assets = binary_dir.parent / "share/fallout2-armada/ce.dat"
+    if not assets.is_dir():
+        raise UserError("The application files are incomplete. Extract the entire download and run Install Fallout 2 again.")
+    # Lock the installation rather than a session: simultaneous launches must
+    # never race through save transactions or mutate the same config.
+    lock = open(game / ".fallout2-armada.lock", "a")
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        raise UserError("This game installation is already running. Close it before launching another copy.")
+    prepare_assets(game, assets)
+    env = os.environ.copy()
+    env["FALLOUT_COMPANION_LAUNCHER"] = str(binary_dir / "fallout2-companion-launch")
+    if any(arg.startswith("--dev-autotest=") for arg in engine_args):
+        env["FALLOUT_CAPTURE_BOTTOM"] = "1"
+    env["FALLOUT_COMPANION_BINARY"] = str(binary_dir / "fallout2-companion")
+    runtime = Path(env.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}"))
+    desktop = env.get("XDG_CURRENT_DESKTOP", "").lower()
+    game_mode = args.mode == "game" or (args.mode == "auto" and (
+        "gamescope" in desktop or ("kde" not in desktop and (runtime / "armada-bottom-env").exists())))
+    env["FALLOUT_SESSION"] = "game" if game_mode else "desktop"
+    if not game_mode:
+        desktop_outputs(env)
+    env.setdefault("FALLOUT_TOP_OUTPUT", "0" if game_mode else "DSI-2")
+    env["FALLOUT_COMPANION"] = "0" if args.single_screen else "1"
+    if game_mode and not args.single_screen:
+        # Readiness can lag behind service activation. The engine retries
+        # the helper asynchronously if the compositor is still starting.
+        subprocess.run(["systemctl", "--user", "start", "armada-bottom-gamescope.service"], check=False)
+        deadline = time.monotonic() + 3
+        while not (runtime / "armada-bottom-env").exists() and time.monotonic() < deadline:
+            time.sleep(.1)
+    state = state_dir()
+    state.mkdir(parents=True, exist_ok=True)
+    log_path = state / "launch.log"
+    logger = logging.getLogger("fallout2-armada")
+    logger.setLevel(logging.INFO)
+    logger.addHandler(RotatingFileHandler(log_path, maxBytes=1024 * 1024, backupCount=1))
+    print(f"Launching {game} ({env['FALLOUT_SESSION']}); diagnostics: {log_path}", flush=True)
+    logger.info("%s %s session=%s", time.strftime('%Y-%m-%d %H:%M:%S'), game, env['FALLOUT_SESSION'])
+    logger.info("outputs: top=%s bottom=%s bottom_bounds=%s bottom_pixel_bounds=%s",
+                env.get("FALLOUT_TOP_OUTPUT"), env.get("FALLOUT_BOTTOM_OUTPUT", "DSI-1"),
+                env.get("FALLOUT_BOTTOM_BOUNDS"), env.get("FALLOUT_BOTTOM_PIXEL_BOUNDS"))
+    child = subprocess.Popen([str(binary_dir / "fallout2-ce"), *engine_args], cwd=game,
+                             env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                             text=True, errors="replace")
+    def collect():
+        for line in child.stdout:
+            logger.info("%s", line.rstrip())
+    collector = threading.Thread(target=collect, daemon=True)
+    collector.start()
+    stopping = [None]
+    def stop(signum, frame):
+        if stopping[0] is None:
+            stopping[0] = time.monotonic()
+            child.terminate()
+    signal.signal(signal.SIGTERM, stop)
+    signal.signal(signal.SIGINT, stop)
+    while True:
+        try:
+            result = child.wait(timeout=.5)
+            break
+        except subprocess.TimeoutExpired:
+            if stopping[0] is not None and time.monotonic() - stopping[0] > 3:
+                child.kill()
+    collector.join(timeout=2)
+    return result
+
+
+if __name__ == "__main__":
+    sys.exit(main())

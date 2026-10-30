@@ -1,3 +1,6 @@
+#ifdef FALLOUT_ARMADA
+#include "platform/linux/display.h"
+#endif
 #include "svga.h"
 
 #include <limits.h>
@@ -135,13 +138,18 @@ int _GNW95_init_mode_ex(int width, int height, int bpp)
     height = settings.screen.resolution_y;
     int scale = settings.screen.scale;
 
-#ifdef __ANDROID__
+#if defined(__ANDROID__) || defined(FALLOUT_ARMADA)
     // CE: The phone's screen decides: the game's 480 lines (the original's
     // height, what the mobile UI is laid out against) and as many columns as
     // the screen's proportions give, full screen. A config copied from a
     // computer (a window of its size) doesn't matter.
     SDL_DisplayMode displayMode;
-    if (SDL_GetDesktopDisplayMode(0, &displayMode) == 0 && displayMode.w > 0 && displayMode.h > 0) {
+    int primaryDisplay = 0;
+#ifdef FALLOUT_ARMADA
+    primaryDisplay = linuxConfiguredDisplay("TOP", "DSI-2");
+    if (primaryDisplay < 0) primaryDisplay = 0;
+#endif
+    if (SDL_GetDesktopDisplayMode(primaryDisplay, &displayMode) == 0 && displayMode.w > 0 && displayMode.h > 0) {
         int longSide = std::max(displayMode.w, displayMode.h);
         int shortSide = std::min(displayMode.w, displayMode.h);
         height = 480;
@@ -215,7 +223,15 @@ int _GNW95_init_window(int width, int height, WindowMode mode, int scale)
             windowFlags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
         }
 
-        gSdlWindow = SDL_CreateWindow(gProgramWindowTitle, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width * scale, height * scale, windowFlags);
+        int windowPosition = SDL_WINDOWPOS_UNDEFINED;
+#ifdef FALLOUT_ARMADA
+        int display = linuxConfiguredDisplay("TOP", "DSI-2");
+        if (display >= 0) windowPosition = SDL_WINDOWPOS_CENTERED_DISPLAY(display);
+        // Borderless output fullscreen: do not ask KWin to change panel mode.
+        windowFlags &= ~SDL_WINDOW_FULLSCREEN;
+        windowFlags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
+#endif
+        gSdlWindow = SDL_CreateWindow(gProgramWindowTitle, windowPosition, windowPosition, width * scale, height * scale, windowFlags);
         if (gSdlWindow == nullptr) {
             return -1;
         }

@@ -41,6 +41,12 @@ On top of CE (its engine, fixes and sfall compatibility are kept and updated fro
 
 The full list of changes is the git history over upstream.
 
+## Armada OS / AYN Thor
+
+Install without a terminal or system packages: [Armada installation guide](docs/armada-installation.md).
+
+Native Linux build, dual-screen launcher, controls, and validation: [Armada port guide](docs/armada.md).
+
 ## Install on Android
 
 1. Download the APK ([latest build](https://github.com/sirbilliams/Fallout2Ce-Dualscreen-Android/releases/tag/latest), `Fallout2-Dualscreen.apk`) and install it.

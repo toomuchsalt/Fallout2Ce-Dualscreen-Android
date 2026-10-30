@@ -1101,6 +1101,7 @@ static void devAutotestPushFinger(Uint32 type, SDL_FingerID finger, float x, flo
     SDL_zero(event);
     event.type = type;
     event.tfinger.touchId = gDevAutotestBottomTouch ? kMuiBottomTouchId : 1;
+    event.tfinger.timestamp = SDL_GetTicks();
     event.tfinger.fingerId = finger;
     event.tfinger.x = x;
     event.tfinger.y = y;
@@ -1973,6 +1974,32 @@ static const DevAutotestStep kDevAutotestThemeSteps[] = {
     { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "e07_end" },
 };
 
+// Self-contained native Linux smoke test: no mod items or existing saves.
+// Widget taps follow their actual surface, including the touch keyboard.
+static const DevAutotestStep kDevAutotestArmadaSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "armada00_world" },
+    { DEV_AUTOTEST_ACTION_COMMAND, static_cast<int>(GameCommandType::Inventory), 0, 0, 30, "armada01_inventory" },
+    { DEV_AUTOTEST_ACTION_BACK, 0, 0, 0, 15, "armada02_back" },
+    { DEV_AUTOTEST_ACTION_COMMAND, static_cast<int>(GameCommandType::Character), 0, 0, 30, "armada03_character" },
+    { DEV_AUTOTEST_ACTION_BACK, 0, 0, 0, 15, "armada04_back" },
+    { DEV_AUTOTEST_ACTION_COMMAND, static_cast<int>(GameCommandType::Pipboy), 0, 0, 30, "armada05_pipboy" },
+    { DEV_AUTOTEST_ACTION_BACK, 0, 0, 0, 15, "armada06_back" },
+    { DEV_AUTOTEST_ACTION_COMMAND, static_cast<int>(GameCommandType::Automap), 0, 0, 30, "armada07_map" },
+    { DEV_AUTOTEST_ACTION_BACK, 0, 0, 0, 15, "armada08_back" },
+    { DEV_AUTOTEST_ACTION_COMMAND, static_cast<int>(GameCommandType::Menu), 0, 0, 30, "armada09_menu" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 30, "armada10_save", "menu.save" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 20, "armada11_edit", "loadsave.description" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 15, "armada12_q", "keyboard.1.0" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 15, "armada13_shift", "keyboard.shift" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 15, "armada14_W", "keyboard.1.1" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 15, "armada15_space", "keyboard.space" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 15, "armada16_delete", "keyboard.delete" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 20, "armada17_done", "keyboard.done" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 60, "armada18_saved", "loadsave.action" },
+    { DEV_AUTOTEST_ACTION_QUICK_LOAD, 0, 0, 0, 60, "armada19_loaded" },
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 15, "armada20_end" },
+};
+
 // Mobile map screen (automap of the current map).
 static const DevAutotestStep kDevAutotestAutomapSteps[] = {
     { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "a00_start" },
@@ -2563,7 +2590,10 @@ static void devAutotestPrepareSaves()
 
 void devAutotestSetScenario(const char* name)
 {
-    if (strcmp(name, "worldmap") == 0) {
+    if (strcmp(name, "armada") == 0) {
+        gDevAutotestSteps = kDevAutotestArmadaSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestArmadaSteps) / sizeof(kDevAutotestArmadaSteps[0]);
+    } else if (strcmp(name, "worldmap") == 0) {
         gDevAutotestSteps = kDevAutotestWorldmapSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestWorldmapSteps) / sizeof(kDevAutotestWorldmapSteps[0]);
     } else if (strcmp(name, "loadsave") == 0) {

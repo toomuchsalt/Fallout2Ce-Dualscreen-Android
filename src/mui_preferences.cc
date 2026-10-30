@@ -21,7 +21,7 @@
 #include "kb.h"
 #include "loadsave.h"
 #include "message.h"
-#include "platform/git_version.h"
+#include <platform/git_version.h>
 #include "platform_compat.h"
 #include "preferences.h"
 #include "settings.h"

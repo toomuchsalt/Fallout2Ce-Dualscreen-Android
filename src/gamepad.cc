@@ -15,6 +15,9 @@
 #include "svga.h"
 #include "touch_hud.h"
 #include "world_view.h"
+#ifdef FALLOUT_ARMADA
+#include "win32.h"
+#endif
 
 namespace fallout {
 
@@ -503,11 +506,17 @@ bool gamepadHandleEvent(const SDL_Event* event)
         return false;
     }
 
+#ifdef FALLOUT_ARMADA
+    if (!gProgramIsActive && (event->type == SDL_CONTROLLERBUTTONDOWN || event->type == SDL_CONTROLLERBUTTONUP)) return true;
+#endif
     switch (event->type) {
     case SDL_CONTROLLERDEVICEADDED:
         openController(event->cdevice.which);
         return true;
     case SDL_CONTROLLERDEVICEREMOVED: {
+#ifdef FALLOUT_ARMADA
+        gamepadReset();
+#endif
         SDL_GameController* controller = SDL_GameControllerFromInstanceID(event->cdevice.which);
         if (controller != nullptr) {
             SDL_GameControllerClose(controller);
@@ -544,6 +553,21 @@ void gamepadDevStick(float x, float y, int frames)
     gDevStickFrames = frames;
 }
 
+#ifdef FALLOUT_ARMADA
+void gamepadReset()
+{
+    gSelectDownTime = 0;
+    gSelectFired = false;
+    gLeftTrigger = true;
+    gRightTrigger = true;
+    gLastTick = 0;
+    gHeld = false;
+    gHeldButton = PAD_COUNT;
+    gNextRepeat = 0;
+    gStickHeld = false;
+}
+#endif
+
 void gamepadTick()
 {
     if (!gStarted) {
@@ -551,9 +575,21 @@ void gamepadTick()
     }
     loadBindings();
 
+#ifdef FALLOUT_ARMADA
+    if (!gProgramIsActive) { gamepadReset(); return; }
+#endif
     Uint32 now = SDL_GetTicks();
     float seconds = gLastTick != 0 ? (now - gLastTick) / 1000.0f : 0.0f;
     gLastTick = now;
+#ifdef FALLOUT_ARMADA
+    // Loading or resume must not complete a held end-turn action. Triggers
+    // must be released before they can fire again after a long stall.
+    if (seconds > 0.25f) {
+        gSelectDownTime = 0;
+        gSelectFired = false;
+        gLeftTrigger = gRightTrigger = true;
+    }
+#endif
     // A stall (loading) doesn't throw the view across the map.
     if (seconds > 0.1f) {
         seconds = 0.1f;

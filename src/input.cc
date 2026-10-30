@@ -1,4 +1,7 @@
 #include "input.h"
+#ifdef FALLOUT_ARMADA
+#include "platform/linux/companion.h"
+#endif
 #include "dev_autotest.h"
 #include "mui_display_settings.h"
 
@@ -371,6 +374,9 @@ void inputEventQueueReset()
     // CE: Finger ends were cleared too: fingers of ours not down any more
     // are let go (without their gestures, as the clicks cleared).
     inputForgetLiftedFingers(false, 0);
+#ifdef FALLOUT_ARMADA
+    if (!devAutotestIsEnabled()) linuxPruneFingerIds();
+#endif
 }
 
 // 0x4C8D1C
@@ -1080,11 +1086,22 @@ static void inputForgetLiftedFingers(bool excludeNew, SDL_FingerID fingerId)
         for (int index = 0; index < fingers && nowCount < kMaxFingers; index++) {
             SDL_Finger* finger = SDL_GetTouchFinger(touchId, index);
             if (finger != nullptr) {
+#ifdef FALLOUT_ARMADA
+                SDL_TouchFingerEvent physical {};
+                physical.touchId = touchId;
+                physical.fingerId = finger->id;
+                linuxNormalizeFinger(physical, SDL_FINGERMOTION);
+                if (physical.fingerId != 0) now[nowCount++] = physical.fingerId;
+#else
                 now[nowCount++] = finger->id;
+#endif
             }
         }
     }
 
+#ifdef FALLOUT_ARMADA
+    nowCount += linuxCompanionFingers(now + nowCount, kMaxFingers - nowCount);
+#endif
     SDL_FingerID down[kMaxFingers * 2];
     int count = 0;
     for (int index = 0; index < nowCount; index++) {
@@ -1129,6 +1146,20 @@ void _GNW95_process_message()
     touchLogFrame();
     actionLogFrame();
 
+#ifdef FALLOUT_ARMADA
+    static Uint32 lastInputPass = 0;
+    Uint32 inputNow = SDL_GetTicks();
+    if (lastInputPass && inputNow - lastInputPass > 1000) {
+        muiCancelSurface(MuiSurface::Top);
+        linuxCompanionCancel();
+        touch_forget_missing(nullptr, 0);
+        inputResetTouchGestures();
+        keyboardReset();
+        gamepadReset();
+    }
+    lastInputPass = inputNow;
+    linuxCompanionPoll();
+#endif
     KeyboardData keyboardData;
     SDL_Event e;
     while (SDL_PollEvent(&e)) {
@@ -1159,6 +1190,10 @@ void _GNW95_process_message()
         case SDL_FINGERDOWN:
         case SDL_FINGERMOTION:
         case SDL_FINGERUP:
+#ifdef FALLOUT_ARMADA
+            linuxNormalizeFinger(e.tfinger, e.type);
+            if (e.tfinger.fingerId == 0) break;
+#endif
             // CE: A new finger: a finger of ours with its number is one
             // whose end never came (Android reuses numbers).
             if (e.type == SDL_FINGERDOWN) {
@@ -1236,6 +1271,12 @@ void _GNW95_process_message()
             muiHandleTextInput(e.text.text);
             break;
         case SDL_WINDOWEVENT:
+#ifdef FALLOUT_ARMADA
+            if (!gSdlWindow || e.window.windowID != SDL_GetWindowID(gSdlWindow)) break;
+            // Focus across the two compositor connections is evaluated below
+            // after both event streams have been read.
+            if (e.window.event == SDL_WINDOWEVENT_FOCUS_GAINED || e.window.event == SDL_WINDOWEVENT_FOCUS_LOST) break;
+#endif
             switch (e.window.event) {
             case SDL_WINDOWEVENT_EXPOSED:
                 windowRefreshAll(&_scr_size);
@@ -1304,8 +1345,44 @@ void _GNW95_process_message()
         }
     }
 
+#ifdef FALLOUT_ARMADA
+    // Transferring focus between compositor connections is asynchronous.
+    // A short grace period prevents a bottom tap from pausing the game.
+    static Uint32 unfocusedSince = 0;
+    const char* driver = SDL_GetCurrentVideoDriver();
+    bool headless = driver && (strcmp(driver, "offscreen") == 0 || strcmp(driver, "dummy") == 0);
+    bool focused = headless || devAutotestIsEnabled() || (gSdlWindow && (SDL_GetWindowFlags(gSdlWindow) & SDL_WINDOW_INPUT_FOCUS)) || linuxCompanionFocused();
+    if (focused) {
+        unfocusedSince = 0;
+        if (!gProgramIsActive) {
+            gProgramIsActive = true;
+            movieHandleFocusGained();
+            windowRefreshAll(&_scr_size);
+            audioEngineResume();
+            mouseDeviceInitMode();
+            lsgMobileSavesMayHaveChanged();
+        }
+    } else {
+        if (!unfocusedSince) unfocusedSince = SDL_GetTicks();
+        if (gProgramIsActive && SDL_GetTicks() - unfocusedSince >= 150) {
+            settingsSave();
+            gProgramIsActive = false;
+            audioEnginePause();
+            muiForgetMissingFingers(nullptr, 0);
+            touch_forget_missing(nullptr, 0);
+            inputResetTouchGestures();
+            keyboardReset();
+            gamepadReset();
+            linuxCompanionCancel();
+            linuxClearFingerIds();
+        }
+    }
+#endif
     // CE: All events are in: fingers of ours not down any more lost their end.
     inputForgetLiftedFingers(false, 0);
+#ifdef FALLOUT_ARMADA
+    if (!devAutotestIsEnabled()) linuxPruneFingerIds();
+#endif
 
     // CE: Sticks and held buttons of game controllers.
     gamepadTick();
@@ -1381,11 +1458,17 @@ void _GNW95_lost_focus()
 void beginTextInput()
 {
     SDL_StartTextInput();
+#ifdef FALLOUT_ARMADA
+    muiTextInputStarted();
+#endif
 }
 
 void endTextInput()
 {
     SDL_StopTextInput();
+#ifdef FALLOUT_ARMADA
+    muiTextInputStopped();
+#endif
 }
 
 } // namespace fallout

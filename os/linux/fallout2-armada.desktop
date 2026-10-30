@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Fallout 2 Armada
+Comment=Touch-first Fallout 2 with a dual-screen companion
+Exec=fallout2-armada
+Icon=applications-games
+Categories=Game;RolePlaying;
+Terminal=false

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Install Fallout 2 on Armada</title>
+<style>body{font:18px/1.65 system-ui,sans-serif;max-width:800px;margin:40px auto;padding:0 22px;color:#182519;background:#f5f5ee}h1,h2{line-height:1.25}li{margin:18px 0}strong{color:#183d21}aside{padding:14px 20px;background:#e4ebdb;border-radius:10px}code{font-size:.95em}a{color:#174d38}</style>
+<h1>Fallout 2 on Armada</h1>
+<p>A graphical setup for the AYN Thor. <strong>No terminal, Linux package installation, administrator password, or changes to Armada's system files are required.</strong></p>
+<aside>You need your own complete Fallout 2 game installation. The download does not include the game. Copy the complete game folder from your computer; do not select a Windows installer or an APK.</aside>
+<h2>Install</h2>
+<ol>
+<li><strong>Switch to Desktop Mode.</strong> In Steam, open the Steam menu, choose <strong>Power → Switch to Desktop</strong>. Open the folder-shaped <strong>Files</strong> application (Dolphin).</li>
+<li><strong>Put your game folder somewhere permanent.</strong> For example, open <strong>Home</strong>, create a folder named <strong>Games</strong>, and copy the entire Fallout 2 folder into it. Inside the game folder you should see <code>master.dat</code>, <code>critter.dat</code>, and its other files and folders. Keep all of them together. Your existing mods and saves may stay with this folder.</li>
+<li><strong>Extract the download.</strong> Use the Armada <code>.tar.gz</code> download from the release page. In Downloads, right-click it (or press and hold), choose <strong>Extract → Extract archive here</strong>, and open <strong>Fallout2-Armada</strong>. If you downloaded an Actions artifact ZIP, extract that ZIP first, then extract the <code>.tar.gz</code> inside it.</li>
+<li><strong>Double-click “Install Fallout 2”.</strong> Choose <strong>Run</strong> if Files asks. This is the application with that name, not a file inside <code>bin</code> or <code>share</code>. If Files says it is not executable, right-click it, open <strong>Properties → Permissions</strong>, tick <strong>Is executable</strong>, then open it again.</li>
+<li><strong>Choose your game folder.</strong> Click <strong>Choose game folder</strong>, select the permanent Fallout 2 folder from step 2, and confirm. Choose the folder itself, not <code>master.dat</code>. If files are missing, setup explains what to choose.</li>
+<li><strong>Play.</strong> After “Setup complete”, open the desktop application menu, choose <strong>Games → Fallout 2 (Armada)</strong>. You may now delete the downloaded archive and its extracted folder from Downloads. Keep your separate game folder.</li>
+</ol>
+<h2>Add it to Steam Game Mode</h2>
+<ol>
+<li>In Desktop Mode, open <strong>Steam</strong>.</li>
+<li>Choose <strong>Games → Add a Non-Steam Game to My Library</strong> (or <strong>Add a Game → Add a Non-Steam Game</strong>).</li>
+<li>Tick <strong>Fallout 2 (Armada)</strong> and choose <strong>Add Selected Programs</strong>. If it is not listed, close and reopen that window; if needed, restart Steam.</li>
+<li>Open its <strong>Properties → Compatibility</strong>. Leave <strong>Force the use of a specific Steam Play compatibility tool</strong> unchecked. This is a native Armada application; it does not use Proton.</li>
+<li>Return to Game Mode using the desktop's <strong>Return to Gaming Mode</strong> shortcut. In Steam, open <strong>Library → Non-Steam → Fallout 2 (Armada) → Play</strong>.</li>
+</ol>
+<h2>Updates, game-folder changes, and removal</h2>
+<p><strong>Update:</strong> Close the game. Download and extract the new Armada archive, then run its <strong>Install Fallout 2</strong> and choose the same game folder. Setup updates its application copy while retaining your game files and saves. The Steam shortcut continues to work.</p>
+<p><strong>Choose a different game folder:</strong> In the desktop application menu, right-click <strong>Fallout 2 (Armada)</strong> and choose <strong>Choose game folder</strong>, or run Install Fallout 2 again.</p>
+<p><strong>Uninstall:</strong> In the desktop application menu, right-click <strong>Fallout 2 (Armada)</strong> and choose <strong>Uninstall application (keep saves)</strong>. Remove its Steam shortcut through Steam separately. The original game folder and saved games are kept.</p>
+<h2>If something goes wrong</h2>
+<ul>
+<li><strong>Missing game files:</strong> Copy the complete installed game folder, not just its Windows installer, shortcut, or two archive files. The folder picker needs the folder that directly contains master.dat and critter.dat.</li>
+<li><strong>Read-only game folder:</strong> Copy it into Games in Home and choose that copy. You do not need to unlock Armada or install any Linux packages.</li>
+<li><strong>No second-screen UI:</strong> Wake the device, confirm both displays are enabled in the desktop's Display settings, and check the game's <strong>Settings → Display → Dual screen</strong>. Restart the game after changing the desktop display layout.</li>
+<li><strong>Game folder moved or deleted:</strong> Choose its new location through the application menu's <strong>Choose game folder</strong> action.</li>
+<li><strong>Setup says the application is running:</strong> Close Fallout 2 and any other setup window, then retry.</li>
+</ul>
+<p><small>Menu wording can vary slightly by Armada version. Desktop and Steam-menu references: <a href="https://help.steampowered.com/en/faqs/view/671A-4453-E8D2-323C/">Valve's Desktop FAQ</a>. This package uses only your home folder and tools already present in Armada's KDE desktop.</small></p>
+</html>

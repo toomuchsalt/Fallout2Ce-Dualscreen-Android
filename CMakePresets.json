@@ -177,7 +177,7 @@
             "name": "Mingw-base",
             "hidden": true,
             "description": "Base preset for all MinGW builds.",
-            "inherits":[
+            "inherits": [
                 "base"
             ],
             "generator": "Ninja",
@@ -242,6 +242,17 @@
             ],
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+            }
+        },
+        {
+            "name": "armada",
+            "displayName": "Armada native touch + companion",
+            "inherits": "linux-base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+                "FALLOUT_ARMADA": "ON",
+                "FALLOUT_DIAGNOSTICS": "OFF",
+                "FALLOUT_VENDORED": "OFF"
             }
         }
     ],
@@ -329,6 +340,21 @@
             "name": "Mingw-x64-Release",
             "displayName": "MinGW x64 Release",
             "configurePreset": "Mingw-x64-release"
+        },
+        {
+            "name": "armada",
+            "configurePreset": "armada",
+            "targets": [
+                "fallout2-ce",
+                "fallout2-companion",
+                "save_catalog_test",
+                "sound_tempo_test",
+                "companion_protocol_test",
+                "companion_backend_test",
+                "fallout2-setup",
+                "suspend_slot_test",
+                "sfall_arrays_test"
+            ]
         }
     ]
 }

@@ -30,6 +30,11 @@ void gamepadDevStick(float x, float y, int frames);
 // input.cc: once per input pass, the sticks and held buttons.
 void gamepadTick();
 
+#ifdef FALLOUT_ARMADA
+// Drop held actions after focus loss, suspend, or disconnection.
+void gamepadReset();
+#endif
+
 } // namespace fallout
 
 #endif /* FALLOUT_GAMEPAD_H_ */

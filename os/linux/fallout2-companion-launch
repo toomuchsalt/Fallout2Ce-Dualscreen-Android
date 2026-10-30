@@ -1,0 +1,8 @@
+#!/bin/sh
+# Preserve inherited frame/socket descriptors through Armada's exec launcher.
+set -eu
+if [ "${FALLOUT_SESSION:-desktop}" = game ]; then
+    export FALLOUT_BOTTOM_COMPOSITOR=1
+    exec armada-run-bottom -- "${FALLOUT_COMPANION_BINARY:?}"
+fi
+exec "${FALLOUT_COMPANION_BINARY:?}"
