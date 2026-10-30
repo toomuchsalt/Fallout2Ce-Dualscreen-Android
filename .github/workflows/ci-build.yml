@@ -118,31 +118,27 @@ jobs:
 
   armada:
     name: Armada Linux (aarch64)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     steps:
       - name: Clone
         uses: actions/checkout@v4
 
-      - name: Build cross compiler image
-        run: docker build -t fallout2-armada-cross -f os/linux/Containerfile.cross .
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build libsdl2-dev zlib1g-dev python3 binutils
 
       - name: Build and stage Armada package
         run: |
-          docker run --rm --user "$(id -u):$(id -g)" \
-            -v "$PWD:/src" fallout2-armada-cross \
-            cmake -S . -B out/build/armada-aarch64 -G Ninja \
-              -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain/armada-aarch64.cmake \
-              -DFALLOUT_ARMADA=ON -DFALLOUT_VENDORED=OFF \
-              -DFALLOUT_DIAGNOSTICS=OFF -DCMAKE_BUILD_TYPE=Release \
-              -DFALLOUT_APP_VERSION="armada-${GITHUB_SHA::7}"
-          docker run --rm --user "$(id -u):$(id -g)" \
-            -v "$PWD:/src" fallout2-armada-cross \
-            cmake --build out/build/armada-aarch64 \
-              --target fallout2-ce fallout2-companion fallout2-setup --parallel 2
-          docker run --rm --user "$(id -u):$(id -g)" \
-            -v "$PWD:/src" fallout2-armada-cross \
-            cmake --install out/build/armada-aarch64 \
-              --prefix /src/out/stage/armada-aarch64/Fallout2-Armada --strip
+          test "$(uname -m)" = aarch64
+          cmake --preset armada -B out/build/armada-aarch64 -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DFALLOUT_APP_VERSION="armada-${GITHUB_SHA::7}"
+          cmake --build out/build/armada-aarch64 \
+            --target fallout2-ce fallout2-companion fallout2-setup --parallel 2
+          cmake --install out/build/armada-aarch64 \
+            --prefix "$PWD/out/stage/armada-aarch64/Fallout2-Armada" --strip
 
       - name: Collect Armada archive
         run: |

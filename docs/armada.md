@@ -41,6 +41,13 @@ version headers are generated in the build directory.
 
 ## GitHub Actions builds
 
+The Armada job builds natively on GitHub's `ubuntu-24.04-arm` runner, using
+our `armada` CMake preset with Release optimization. SDL2/zlib development
+packages are installed only on the disposable CI runner. No Docker image,
+cross-toolchain, or emulation is needed in CI; the cross-container instructions
+above remain available for local x86-64 development. The archive layout and
+graphical installation on immutable Armada are unchanged.
+
 The Build workflow produces separate `Fallout2-Dualscreen-apk` and
 `Fallout2-Dualscreen-armada-aarch64` artifacts for pull requests, manual runs,
 and main/tag pushes. The Armada artifact contains
