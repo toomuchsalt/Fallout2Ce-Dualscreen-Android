@@ -1,9 +1,9 @@
 #ifndef FALLOUT_LINUX_DISPLAY_H_
 #define FALLOUT_LINUX_DISPLAY_H_
 #include <SDL.h>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <cstdio>
 #include <initializer_list>
 
 namespace fallout {
@@ -54,5 +54,5 @@ inline float linuxDensity(const char* variable, float fallback)
     float density = std::strtof(value, &end);
     return end != value && !*end && density >= 0.5f && density <= 6.0f ? density : fallback;
 }
-}
+} // namespace fallout
 #endif

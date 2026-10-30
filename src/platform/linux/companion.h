@@ -15,5 +15,5 @@ void linuxNormalizeFinger(SDL_TouchFingerEvent& event, Uint32 type);
 void linuxClearFingerIds();
 void linuxPruneFingerIds();
 int linuxCompanionFingers(SDL_FingerID* ids, int capacity);
-}
+} // namespace fallout
 #endif

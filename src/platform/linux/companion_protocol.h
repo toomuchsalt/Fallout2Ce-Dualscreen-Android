@@ -14,8 +14,20 @@ constexpr uint32_t kMaxHeight = 2560;
 constexpr size_t kFrameBytes = size_t(kMaxWidth) * kMaxHeight * 4;
 constexpr int kSocketFd = 198;
 constexpr int kMemoryFd = 199;
-enum class Type : uint32_t { Ready = 1, Touch, Cancel, Heartbeat, Stop, Focus, Text, EditKey, Visibility, TextInput };
-enum class SlotState : uint32_t { Free, Writing, Ready, Reading };
+enum class Type : uint32_t { Ready = 1,
+    Touch,
+    Cancel,
+    Heartbeat,
+    Stop,
+    Focus,
+    Text,
+    EditKey,
+    Visibility,
+    TextInput };
+enum class SlotState : uint32_t { Free,
+    Writing,
+    Ready,
+    Reading };
 struct Message {
     uint32_t version = kVersion;
     Type type = Type::Heartbeat;

@@ -576,7 +576,10 @@ void gamepadTick()
     loadBindings();
 
 #ifdef FALLOUT_ARMADA
-    if (!gProgramIsActive) { gamepadReset(); return; }
+    if (!gProgramIsActive) {
+        gamepadReset();
+        return;
+    }
 #endif
     Uint32 now = SDL_GetTicks();
     float seconds = gLastTick != 0 ? (now - gLastTick) / 1000.0f : 0.0f;

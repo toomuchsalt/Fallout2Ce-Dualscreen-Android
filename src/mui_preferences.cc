@@ -21,13 +21,13 @@
 #include "kb.h"
 #include "loadsave.h"
 #include "message.h"
-#include <platform/git_version.h>
 #include "platform_compat.h"
 #include "preferences.h"
 #include "settings.h"
 #include "svga.h"
 #include "world_view.h"
 #include "xfile.h"
+#include <platform/git_version.h>
 
 #include <SDL.h>
 
