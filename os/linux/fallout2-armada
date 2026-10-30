@@ -123,6 +123,8 @@ def launch_game(game, args, engine_args):
     game_mode = args.mode == "game" or (args.mode == "auto" and (
         "gamescope" in desktop or ("kde" not in desktop and (runtime / "armada-bottom-env").exists())))
     env["FALLOUT_SESSION"] = "game" if game_mode else "desktop"
+    env["SDL_ENABLE_SCREEN_KEYBOARD"] = "1"
+    env["SDL_ENABLE_STEAM_SCREEN_KEYBOARD"] = "1" if game_mode else "0"
     if not game_mode:
         desktop_outputs(env)
     env.setdefault("FALLOUT_TOP_OUTPUT", "0" if game_mode else "DSI-2")

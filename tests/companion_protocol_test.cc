@@ -23,6 +23,10 @@ int main()
     message.b = 32; CHECK(!validMessage(message));
     message.b = 0; message.x = -1; CHECK(!validMessage(message));
     message.x = .5f; message.version++; CHECK(!validMessage(message));
+    message = Message {}; message.type = Type::TextInput;
+    CHECK(validMessage(message));
+    message.a = 1; CHECK(validMessage(message));
+    message.a = 2; CHECK(!validMessage(message));
     auto* shared = static_cast<SharedFrames*>(mmap(nullptr, sizeof(SharedFrames), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
     CHECK(shared != MAP_FAILED);
     for (auto& slot : shared->slots) new (&slot.state) std::atomic<uint32_t>(uint32_t(SlotState::Free));

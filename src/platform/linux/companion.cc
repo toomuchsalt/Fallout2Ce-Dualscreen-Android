@@ -34,6 +34,8 @@ float gDensity = 2.6f;
 bool gEnabled = false, gFocused = false, gVisible = false;
 Uint32 gRetry = 0, gLastSeen = 0;
 uint32_t gSequence = 0;
+bool gTextInputActive = false;
+int gSentTextInput = -1;
 std::vector<unsigned char> gCapturedFrame;
 std::array<SDL_FingerID, 32> gDown {};
 std::map<std::pair<SDL_TouchID, SDL_FingerID>, SDL_FingerID> gFingerIds;
@@ -47,6 +49,7 @@ void disconnected()
     gWidth = gHeight = 0;
     gCapturedFrame.clear();
     gFocused = gVisible = false;
+    gSentTextInput = -1;
     if (gFrames) munmap(gFrames, sizeof(SharedFrames));
     gFrames = nullptr;
     if (gChild > 0) {
@@ -147,6 +150,12 @@ void linuxCompanionCancel()
         else ++it;
     }
 }
+void linuxCompanionSetTextInput(bool active)
+{
+    gTextInputActive = active;
+    // An explicit tap on an already edited field may reopen a dismissed OSK.
+    gSentTextInput = -1;
+}
 void linuxCompanionPoll()
 {
     if (gSocket == -1) {
@@ -167,6 +176,7 @@ void linuxCompanionPoll()
         if (m.type == Type::Ready) {
             if (gWidth != m.a || gHeight != m.b) { linuxCompanionCancel(); gCapturedFrame.clear(); }
             gWidth = m.a; gHeight = m.b; gDensity = m.x; gVisible = true;
+            gSentTextInput = -1;
         } else if (m.type == Type::Visibility) {
             gVisible = m.a != 0;
             if (!gVisible) linuxCompanionCancel();
@@ -207,6 +217,14 @@ void linuxCompanionPoll()
             muiHandleFingerEvent(&e);
         }
     }
+    if (gSentTextInput != int(gTextInputActive)) {
+        Message command; command.type = Type::TextInput; command.a = gTextInputActive;
+        ssize_t sent = send(gSocket, &command, sizeof(command), MSG_DONTWAIT | MSG_NOSIGNAL);
+        if (sent == sizeof(command)) gSentTextInput = gTextInputActive;
+        else if (sent < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)) {
+            // Retry next pass; losing a stop would leave a keyboard open.
+        } else { disconnected(); return; }
+    }
     if (SDL_GetTicks() - gLastSeen > (gWidth > 0 ? 3000u : 15000u)) disconnected();
 }
 void linuxClearFingerIds()
@@ -242,6 +260,7 @@ bool linuxCompanionFocused() { return gFocused; }
 void linuxCompanionShutdown()
 {
     gEnabled = false;
+    gTextInputActive = false;
     disconnected();
     if (gChild > 0) { waitpid(gChild, nullptr, WNOHANG); gChild = -1; }
 }

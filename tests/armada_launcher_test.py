@@ -22,7 +22,7 @@ class LauncherTest(unittest.TestCase):
         self.bin = self.root / "package/bin"
         self.bin.mkdir(parents=True)
         shutil.copy(LAUNCHER, self.bin)
-        (self.bin / "fallout2-ce").write_text('#!/usr/bin/env python3\nimport sys\nfrom pathlib import Path\nPath("argv.txt").write_text(repr(sys.argv[1:]))\nprint("engine diagnostic")\n')
+        (self.bin / "fallout2-ce").write_text('#!/usr/bin/env python3\nimport sys, os, json\nfrom pathlib import Path\nPath("argv.txt").write_text(repr(sys.argv[1:]))\nPath("keyboard-env.json").write_text(json.dumps({k: os.environ.get(k) for k in ("SDL_ENABLE_SCREEN_KEYBOARD", "SDL_ENABLE_STEAM_SCREEN_KEYBOARD")}))\nprint("engine diagnostic")\n')
         (self.bin / "fallout2-ce").chmod(0o755)
         self.assets = self.root / "package/share/fallout2-armada/ce.dat"
         self.assets.mkdir(parents=True)
@@ -70,6 +70,14 @@ class LauncherTest(unittest.TestCase):
             resolve(env)
         self.assertEqual(env["FALLOUT_BOTTOM_OUTPUT"], "custom-output")
         self.assertNotIn("FALLOUT_BOTTOM_BOUNDS", env)
+
+    def test_session_keyboard_selection(self):
+        self.assertEqual(self.run_launcher().returncode, 0)
+        env = json.loads((self.game / "keyboard-env.json").read_text())
+        self.assertEqual(env, {"SDL_ENABLE_SCREEN_KEYBOARD": "1", "SDL_ENABLE_STEAM_SCREEN_KEYBOARD": "0"})
+        self.assertEqual(self.run_launcher("--mode", "game", "--single-screen").returncode, 0)
+        env = json.loads((self.game / "keyboard-env.json").read_text())
+        self.assertEqual(env, {"SDL_ENABLE_SCREEN_KEYBOARD": "1", "SDL_ENABLE_STEAM_SCREEN_KEYBOARD": "1"})
 
     def test_missing_data(self):
         (self.game / "MASTER.DAT").unlink()

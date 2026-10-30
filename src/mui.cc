@@ -1172,64 +1172,6 @@ static void muiDispatchBack(const std::vector<MuiScreen*>& screens)
     }
 }
 
-#ifdef FALLOUT_ARMADA
-namespace {
-    bool gKeyboardOpen = false;
-    bool gKeyboardShift = false;
-    MuiSurface gKeyboardSurface = MuiSurface::Top;
-    MuiScreen* gKeyboardOwner = nullptr;
-    void keyboardKey(SDL_Scancode code)
-    {
-        for (Uint32 type : { Uint32(SDL_KEYDOWN), Uint32(SDL_KEYUP) }) {
-            SDL_Event e {};
-            e.type = type;
-            e.key.state = type == SDL_KEYDOWN ? SDL_PRESSED : SDL_RELEASED;
-            e.key.keysym.scancode = code;
-            SDL_PushEvent(&e);
-        }
-    }
-    void renderKeyboard(MuiContext& ui, const MuiRect& rect)
-    {
-        ui.panel(rect);
-        const std::u32string rows[] = { U"1234567890", U"qwertyuiop", U"asdfghjkl", U"zxcvbnm.,-" };
-        float gap = ui.dp(3.0f);
-        float rowHeight = (rect.h - gap * 6) / 5;
-        for (int row = 0; row < 4; ++row) {
-            float keyWidth = (rect.w - gap * 11) / 10;
-            for (size_t col = 0; col < rows[row].size(); ++col) {
-                char32_t ch = rows[row][col];
-                if (gKeyboardShift && ch >= U'a' && ch <= U'z') ch -= U'a' - U'A';
-                MuiRect key { rect.x + gap + col * (keyWidth + gap), rect.y + gap + row * (rowHeight + gap), keyWidth, rowHeight };
-                if (ui.button("keyboard." + std::to_string(row) + "." + std::to_string(col), key, std::u32string(1, ch))) gTextInput += ch;
-            }
-        }
-        float y = rect.y + gap + 4 * (rowHeight + gap);
-        float unit = (rect.w - gap * 5) / 10;
-        if (ui.button("keyboard.shift", { rect.x + gap, y, unit * 2, rowHeight }, gKeyboardShift ? U"abc" : U"ABC")) gKeyboardShift = !gKeyboardShift;
-        if (ui.button("keyboard.space", { rect.x + gap * 2 + unit * 2, y, unit * 4, rowHeight }, U"Space")) gTextInput += U' ';
-        if (ui.button("keyboard.delete", { rect.x + gap * 3 + unit * 6, y, unit * 2, rowHeight }, U"Delete")) keyboardKey(SDL_SCANCODE_BACKSPACE);
-        if (ui.button("keyboard.done", { rect.x + gap * 4 + unit * 8, y, unit * 2, rowHeight }, U"Done")) keyboardKey(SDL_SCANCODE_RETURN);
-    }
-}
-#endif
-void muiTextInputStarted()
-{
-#ifdef FALLOUT_ARMADA
-    gKeyboardOpen = true;
-    gKeyboardShift = false;
-    gKeyboardSurface = gSurface == &surfaceOf(MuiSurface::Bottom) ? MuiSurface::Bottom : MuiSurface::Top;
-    gKeyboardOwner = topScreen(gKeyboardSurface);
-    gTextInput.clear();
-#endif
-}
-void muiTextInputStopped()
-{
-#ifdef FALLOUT_ARMADA
-    gKeyboardOpen = false;
-    gKeyboardOwner = nullptr;
-#endif
-}
-
 // Builds the screens of [surface] into the renderer's current target, an
 // output of [width] x [height] pixels at [density] (dp scale).
 static void muiRenderSurface(SDL_Renderer* renderer, MuiSurface surface, int width, int height, float density)
@@ -1277,22 +1219,6 @@ static void muiRenderSurface(SDL_Renderer* renderer, MuiSurface surface, int wid
     context.screen = { 0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height) };
     context.safe = gSurface->safeRect;
     context.now = now;
-#ifdef FALLOUT_ARMADA
-    // Follow the actual editor in both directions as the companion reconnects.
-    // Fixed top-screen editors (such as save descriptions) must stay on top.
-    // Check registration before dereferencing: screens may be removed mid-edit.
-    if (gKeyboardOpen && gKeyboardOwner != nullptr
-        && std::find(gScreens.begin(), gScreens.end(), gKeyboardOwner) != gScreens.end()) {
-        gKeyboardSurface = gKeyboardOwner->surface();
-    }
-    bool keyboard = gKeyboardOpen && gKeyboardSurface == surface;
-    MuiRect keyboardRect {};
-    if (keyboard) {
-        float keyboardHeight = height * 0.44f;
-        keyboardRect = { 0.0f, height - keyboardHeight, float(width), keyboardHeight };
-        context.safe.h = std::max(0.0f, std::min(context.safe.bottom(), keyboardRect.y) - context.safe.y);
-    }
-#endif
 
     // The world on top is frozen while the game runs a screen on the bottom
     // one: dimmed, so it doesn't look like it is still playing. The bottom
@@ -1313,9 +1239,6 @@ static void muiRenderSurface(SDL_Renderer* renderer, MuiSurface surface, int wid
         }
         context.current = screen;
         context.isInteractive = screen == top;
-#ifdef FALLOUT_ARMADA
-        if (keyboard && gSurface->pointer.y >= keyboardRect.y) context.isInteractive = false;
-#endif
         screen->build(context);
     }
 
@@ -1358,13 +1281,6 @@ static void muiRenderSurface(SDL_Renderer* renderer, MuiSurface surface, int wid
             muiFillRect({ 0, y, context.screen.w, 1 }, muiRgb(0, 55));
     }
 
-#ifdef FALLOUT_ARMADA
-    if (keyboard && gKeyboardOpen) {
-        context.current = top;
-        context.isInteractive = true;
-        renderKeyboard(context, keyboardRect);
-    }
-#endif
     muiDrawEnd();
 
     if (logicalWidth != 0 && logicalHeight != 0) {

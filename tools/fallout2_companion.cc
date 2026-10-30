@@ -51,12 +51,16 @@ int main(int argc, char** argv)
     SDL_SetHint(SDL_HINT_VIDEO_X11_NET_WM_BYPASS_COMPOSITOR, "0");
     SDL_SetHint(SDL_HINT_APP_NAME, "Fallout 2 Companion");
     SDL_SetHint(SDL_HINT_VIDEO_MINIMIZE_ON_FOCUS_LOSS, "0");
+    // Steam's keyboard belongs to the primary Gamescope/Steam connection.
+    // The helper accepts text but must never open or dismiss Steam's overlay.
+    SDL_SetHintWithPriority("SDL_ENABLE_STEAM_SCREEN_KEYBOARD", "0", SDL_HINT_OVERRIDE);
     // The companion must not open controllers: Steam/InputPlumber's virtual
     // gamepad belongs to the main process, regardless of window focus.
     fprintf(stderr, "companion: initializing video\n");
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS) != 0) {
         fprintf(stderr, "companion: SDL: %s\n", SDL_GetError()); return 1;
     }
+    SDL_StopTextInput(); // SDL2 enables text by default; suppress startup OSKs.
     fprintf(stderr, "companion: video driver %s\n", SDL_GetCurrentVideoDriver());
     const char* output = getenv("FALLOUT_BOTTOM_OUTPUT");
     bool gameMode = getenv("FALLOUT_BOTTOM_COMPOSITOR") != nullptr;
@@ -89,7 +93,7 @@ int main(int argc, char** argv)
         SDL_DestroyWindow(window); SDL_Quit(); return 1;
     }
     SDL_ShowCursor(SDL_DISABLE);
-    SDL_StartTextInput();
+    bool textInputActive = false;
     int width = 0, height = 0;
     float density = fallout::linuxDensity("FALLOUT_BOTTOM_DENSITY", 2.6f);
     auto ready = [&]() {
@@ -120,16 +124,22 @@ int main(int argc, char** argv)
         ssize_t received = recv(kSocketFd, &command, sizeof(command), MSG_DONTWAIT | MSG_TRUNC);
         if (received == 0 || (received < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)) break;
         if (received > 0 && (received != sizeof(command) || !validMessage(command) || command.type == Type::Stop)) break;
+        if (received > 0 && command.type == Type::TextInput) {
+            if (textInputActive && command.a) SDL_StopTextInput();
+            textInputActive = command.a != 0;
+            if (textInputActive) SDL_StartTextInput();
+            else SDL_StopTextInput();
+        }
         SDL_Event event;
         // Bounded polling ensures continuous input cannot starve heartbeats
         // or frame presentation.
         for (int n = 0; n < 128 && running && SDL_PollEvent(&event); ++n) {
-            if (event.type == SDL_TEXTINPUT) {
+            if (textInputActive && event.type == SDL_TEXTINPUT) {
                 Message m; m.type = Type::Text;
                 memcpy(m.text, event.text.text, sizeof(m.text)); m.text[31] = 0;
                 running = sendMessage(m);
             }
-            if (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) {
+            if (textInputActive && (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP)) {
                 int code = -1;
                 if (event.key.keysym.scancode == SDL_SCANCODE_BACKSPACE) code = 0;
                 if (event.key.keysym.scancode == SDL_SCANCODE_RETURN || event.key.keysym.scancode == SDL_SCANCODE_KP_ENTER) code = 1;

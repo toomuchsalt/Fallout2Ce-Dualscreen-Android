@@ -8,13 +8,13 @@
 #include <ctime>
 
 namespace fallout::companion {
-constexpr uint32_t kVersion = 1;
+constexpr uint32_t kVersion = 2;
 constexpr uint32_t kMaxWidth = 2560;
 constexpr uint32_t kMaxHeight = 2560;
 constexpr size_t kFrameBytes = size_t(kMaxWidth) * kMaxHeight * 4;
 constexpr int kSocketFd = 198;
 constexpr int kMemoryFd = 199;
-enum class Type : uint32_t { Ready = 1, Touch, Cancel, Heartbeat, Stop, Focus, Text, EditKey, Visibility };
+enum class Type : uint32_t { Ready = 1, Touch, Cancel, Heartbeat, Stop, Focus, Text, EditKey, Visibility, TextInput };
 enum class SlotState : uint32_t { Free, Writing, Ready, Reading };
 struct Message {
     uint32_t version = kVersion;
@@ -66,6 +66,7 @@ inline bool validMessage(const Message& m)
         return m.text[31] == 0;
     case Type::EditKey:
         return m.a >= 0 && m.a <= 2 && (m.b == 0 || m.b == 1);
+    case Type::TextInput:
     case Type::Visibility:
     case Type::Focus:
         return m.a == 0 || m.a == 1;

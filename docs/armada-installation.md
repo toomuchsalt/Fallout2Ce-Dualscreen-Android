@@ -38,6 +38,8 @@ Return to Game Mode using the desktop shortcut. Open **Library → Non-Steam →
 
 You can also launch the game directly from the desktop application menu.
 
+Tap a text field to open the system keyboard: Plasma Keyboard on the desktop, or Steam’s keyboard in Game Mode. Steam controls its keyboard’s screen placement; the game cannot select the bottom screen for it.
+
 ## Updates, changing folders, and removal
 
 **Update:** close the game, download and extract the new Armada archive, and run its **Install Fallout 2**. Choose the same game folder. Setup replaces the application and preserves your game files and saves. Your existing Steam entry continues to work.

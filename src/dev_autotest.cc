@@ -1975,7 +1975,7 @@ static const DevAutotestStep kDevAutotestThemeSteps[] = {
 };
 
 // Self-contained native Linux smoke test: no mod items or existing saves.
-// Widget taps follow their actual surface, including the touch keyboard.
+// Widget taps follow their actual surface; text comes through SDL text events.
 static const DevAutotestStep kDevAutotestArmadaSteps[] = {
     { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "armada00_world" },
     { DEV_AUTOTEST_ACTION_COMMAND, static_cast<int>(GameCommandType::Inventory), 0, 0, 30, "armada01_inventory" },
@@ -1989,12 +1989,8 @@ static const DevAutotestStep kDevAutotestArmadaSteps[] = {
     { DEV_AUTOTEST_ACTION_COMMAND, static_cast<int>(GameCommandType::Menu), 0, 0, 30, "armada09_menu" },
     { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 30, "armada10_save", "menu.save" },
     { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 20, "armada11_edit", "loadsave.description" },
-    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 15, "armada12_q", "keyboard.1.0" },
-    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 15, "armada13_shift", "keyboard.shift" },
-    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 15, "armada14_W", "keyboard.1.1" },
-    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 15, "armada15_space", "keyboard.space" },
-    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 15, "armada16_delete", "keyboard.delete" },
-    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 20, "armada17_done", "keyboard.done" },
+    { DEV_AUTOTEST_ACTION_TYPE_TEXT, 0, 0, 0, 15, "armada12_text", "qW" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 20, "armada17_done", "loadsave.description.done" },
     { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 60, "armada18_saved", "loadsave.action" },
     { DEV_AUTOTEST_ACTION_QUICK_LOAD, 0, 0, 0, 60, "armada19_loaded" },
     { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 15, "armada20_end" },
@@ -3393,11 +3389,18 @@ void devAutotestTick()
             break;
         }
         case DEV_AUTOTEST_ACTION_TYPE_TEXT: {
+#ifdef FALLOUT_ARMADA
+            // SDL2-compat cannot safely synthesize SDL_TEXTINPUT through
+            // SDL_PushEvent on all deployed versions. Use the same text
+            // delivery entrypoint as the companion transport.
+            muiHandleTextInput(step->widget);
+#else
             SDL_Event event;
             SDL_zero(event);
             event.type = SDL_TEXTINPUT;
             SDL_strlcpy(event.text.text, step->widget, sizeof(event.text.text));
             SDL_PushEvent(&event);
+#endif
             break;
         }
         case DEV_AUTOTEST_ACTION_EVENT:

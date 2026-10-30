@@ -95,8 +95,6 @@ constexpr int kMuiSurfaceCount = 2;
 
 // Drop captures and pending taps on a disconnected/resized surface.
 void muiCancelSurface(MuiSurface surface);
-void muiTextInputStarted();
-void muiTextInputStopped();
 
 // Touch device id of the bottom screen's fingers: BottomScreen.java's touches
 // come into the game's event queue as SDL finger events with it

@@ -87,10 +87,21 @@ The companion already forwards both native touches and mouse-style touches. Cont
 UI focus navigation, the map cursor, and the quick-use ring. See the
 [upstream controller guide](gamepad-stage3.md) for controls and settings.
 
-Text fields display an in-engine touch keyboard with ASCII letters, numbers,
-case toggle, punctuation, space, delete, and Done. Physical keyboard text
-(including supported Unicode) and editing keys work with either window
-focused. Available characters are still limited by Fallout's game encoding.
+Text fields use Plasma Keyboard in KDE Desktop Mode and Steam's keyboard in
+Game Mode. The launcher selects the appropriate SDL keyboard integration;
+text input starts only during editing and is synchronized with the companion,
+including after reconnects. The companion forwards text and editing keys and
+never opens Steam's overlay itself. Physical keyboards work in either window.
+Available characters are limited by Fallout's game encoding.
+
+Plasma controls its keyboard's output placement (observed on the Thor's bottom
+screen). Steam's documented floating-keyboard API has no display selector:
+its rectangle is relative to the game window, not a target monitor. Armada's
+Game Mode uses a separate bottom compositor, so the port leaves Steam's
+keyboard on its normal primary overlay. Moving it to the bottom would need
+Steam/Armada compositor integration beyond this game's text-input request.
+See [Steam's keyboard API](https://partner.steamgames.com/doc/api/isteamutils#ShowFloatingGamepadTextInput).
+
 
 Environment overrides:
 
@@ -140,8 +151,8 @@ bin/fallout2-armada --game-dir /path/to/test-copy -- \
   --dev-new-game --dev-autotest-scenario=armada --dev-autotest=/path/to/existing-parent/captures
 ```
 
-This opens the companion screens, types `qW` through the touch keyboard,
-saves, and reloads. It writes a real save into the test copy. Captures include
+This opens the companion screens, injects `qW` through the text-input handler,
+saves, and reloads. System keyboard presentation requires a separate physical check. It writes a real save into the test copy. Captures include
 both surfaces when the companion is active. The launcher enables bottom frame
 capture only for autotests. Confirm `autotest finished`, no `FAIL`/`MISMATCH`
 messages, and a saved description of `qW`.
@@ -183,3 +194,18 @@ required. KDE display placement was subsequently validated at 150% scaling, incl
 user confirmation that the companion test pattern appeared on the physical
 bottom screen. Connector names take precedence over geometry; centered fullscreen
 placement explicitly targets the chosen output.
+
+## System keyboard validation (2026-10-30)
+
+On Armada `20261028.f0a50c0`, Plasma Keyboard is installed and provides
+Wayland text input. A native SDL probe received all four characters of `test`;
+physical in-game text editing was then confirmed in both Desktop Mode and
+Steam Game Mode. Plasma appeared on the bottom screen; Steam's keyboard
+appeared on the top screen.
+
+The companion transport tests pass on the Thor, including editing start/stop,
+rejection of text after editing ends, and replay of editing state after a new
+Ready message. The disposable offscreen gameplay scenario completed text entry,
+save, and reload. Its text injection calls the same delivery handler as the
+companion: synthetic SDL_TEXTINPUT pushed through the host's SDL2 compatibility
+layer crashed inside SDL and is not used by this Armada autotest.

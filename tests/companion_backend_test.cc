@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <vector>
+#include <string>
 #include <sys/mman.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -17,6 +18,7 @@ using namespace fallout::companion;
 namespace {
 std::vector<SDL_Event> events;
 int cancellations = 0;
+std::vector<std::string> texts;
 void sendPacket(Message m) { m.timestamp = monotonicMs(); CHECK(send(kSocketFd, &m, sizeof(m), MSG_NOSIGNAL) == sizeof(m)); }
 int fakeHelper()
 {
@@ -25,6 +27,23 @@ int fakeHelper()
     Message m; m.type = Type::Ready; m.a = 8; m.b = 8; m.x = 2.6f; sendPacket(m);
     m = Message {}; m.type = Type::Touch; m.x = .5f; m.y = .5f; sendPacket(m);
     Uint32 start = SDL_GetTicks();
+    bool sawInactive = false, sawActive = false, sawStop = false;
+    while (!sawStop && SDL_GetTicks() - start < 5000) {
+        Message command;
+        ssize_t n = recv(kSocketFd, &command, sizeof(command), MSG_DONTWAIT);
+        if (n < 0) { SDL_Delay(1); continue; }
+        CHECK(n == sizeof(command) && validMessage(command) && command.type == Type::TextInput);
+        if (!command.a && !sawActive) sawInactive = true;
+        if (command.a) {
+            CHECK(sawInactive);
+            sawActive = true;
+            Message text; text.type = Type::Text; strcpy(text.text, "test"); sendPacket(text);
+        } else if (sawActive) {
+            sawStop = true;
+            Message text; text.type = Type::Text; strcpy(text.text, "late text"); sendPacket(text);
+        }
+    }
+    CHECK(sawInactive && sawActive && sawStop);
     bool read = false;
     while (SDL_GetTicks() - start < 5000) {
         auto* slot = acquireRead(frames);
@@ -42,19 +61,31 @@ int fakeHelper()
     m.type = Type::Cancel; sendPacket(m);
     // The resized companion must invalidate old captures.
     m.type = Type::Ready; m.a = 16; m.b = 16; m.x = 2.6f; sendPacket(m);
-    SDL_Delay(50);
+    // A new Ready (resize/reconnect) must replay the current editing state.
+    bool replayed = false;
+    while (!replayed && SDL_GetTicks() - start < 5000) {
+        Message command;
+        ssize_t n = recv(kSocketFd, &command, sizeof(command), MSG_DONTWAIT);
+        if (n < 0) { SDL_Delay(1); continue; }
+        CHECK(n == sizeof(command) && validMessage(command));
+        CHECK(command.type == Type::TextInput && command.a == 0);
+        replayed = true;
+    }
+    CHECK(replayed);
     return 0;
 }
 }
 namespace fallout {
 int debugPrint(const char*, ...) { return 0; }
-void muiHandleTextInput(const char*) {}
+void muiHandleTextInput(const char* text) { texts.emplace_back(text); }
 void muiCancelSurface(MuiSurface surface) { CHECK(surface == MuiSurface::Bottom); ++cancellations; }
 bool muiHandleFingerEvent(const SDL_Event* event) { events.push_back(*event); return true; }
 }
 int main(int argc, char** argv)
 {
-    SDL_Init(SDL_INIT_TIMER | SDL_INIT_EVENTS);
+    SDL_setenv("SDL_VIDEODRIVER", "dummy", 1);
+    CHECK(SDL_Init(SDL_INIT_TIMER | SDL_INIT_EVENTS | SDL_INIT_VIDEO) == 0);
+    SDL_StopTextInput();
     if (getenv("FALLOUT_TEST_HELPER")) return fakeHelper();
     setenv("FALLOUT_TEST_HELPER", "1", 1);
     setenv("FALLOUT_COMPANION_LAUNCHER", argv[0], 1);
@@ -71,6 +102,12 @@ int main(int argc, char** argv)
     CHECK(events[0].type == SDL_FINGERDOWN && events[0].tfinger.touchId == kMuiBottomTouchId);
     CHECK(events[0].tfinger.fingerId != top.fingerId && events[0].tfinger.fingerId != other.fingerId);
     SDL_FingerID down[32]; CHECK(linuxCompanionFingers(down, 32) == 1);
+    SDL_StartTextInput();
+    linuxCompanionSetTextInput(true);
+    while (texts.empty() && SDL_GetTicks() - start < 5000) { linuxCompanionPoll(); SDL_Delay(1); }
+    CHECK(texts == std::vector<std::string> { "test" });
+    SDL_StopTextInput();
+    linuxCompanionSetTextInput(false);
     // Padded input pitch must be copied correctly into tightly packed frames.
     unsigned char pixels[8 * 40];
     for (int y = 0; y < 8; ++y) memset(pixels + y * 40, y, 40);
@@ -78,8 +115,9 @@ int main(int argc, char** argv)
     while (bottomScreenAvailable() && SDL_GetTicks() - start < 5000) { linuxCompanionPoll(); SDL_Delay(1); }
     CHECK(!bottomScreenAvailable()); CHECK(events.size() == 2);
     CHECK(events[1].type == SDL_FINGERUP && events[1].tfinger.fingerId == events[0].tfinger.fingerId);
+    CHECK(texts == std::vector<std::string> { "test" });
     CHECK(cancellations >= 3); CHECK(linuxCompanionFingers(down, 32) == 0);
     linuxCompanionShutdown(); SDL_Quit();
-    puts("PASS: real child transport, pitch, finger identity, stale touch, resize, EOF cancellation");
+    puts("PASS: child transport, editing lifecycle, late-text rejection, state replay, frames, touch cancellation");
     return 0;
 }

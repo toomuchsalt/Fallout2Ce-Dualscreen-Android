@@ -6,6 +6,8 @@ void linuxCompanionInit();
 void linuxCompanionPoll();
 void linuxCompanionShutdown();
 void linuxCompanionCancel();
+// Synchronize the editing lifecycle with the window receiving bottom input.
+void linuxCompanionSetTextInput(bool active);
 bool linuxCompanionFocused();
 // Canonical IDs include device identity, so top/bottom and multiple devices
 // cannot collide even when the OS reuses pointer numbers.

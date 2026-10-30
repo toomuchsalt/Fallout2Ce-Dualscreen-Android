@@ -1459,7 +1459,7 @@ void beginTextInput()
 {
     SDL_StartTextInput();
 #ifdef FALLOUT_ARMADA
-    muiTextInputStarted();
+    linuxCompanionSetTextInput(true);
 #endif
 }
 
@@ -1467,7 +1467,7 @@ void endTextInput()
 {
     SDL_StopTextInput();
 #ifdef FALLOUT_ARMADA
-    muiTextInputStopped();
+    linuxCompanionSetTextInput(false);
 #endif
 }
 
